@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "cytoscape": "^3.33.1",
+    "gifshot": "^0.4.5",
     "puppeteer": "^24.30.0"
   }
 }
