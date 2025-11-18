@@ -1,6 +1,6 @@
 const cytoscape = require('cytoscape');
 const fs = require('fs');
-
+const path = require('path');
 
 // ---------- Watts–Strogatz generator ----------
 function wattsStrogatz(N, k, c) {
@@ -185,17 +185,41 @@ function runSIRSfixed(cy, params) {
     return series;
 }
 
+function exportGraph(cy, params) {
+    // Unique filename
+    const filename = `ws_graph_c${String(params.c).replace('.', 'p')}.json`;
+
+    if (!fs.existsSync(`./graphs/sim${stamp}`)) {
+        fs.mkdirSync(`./graphs/sim${stamp}`);
+    }
+
+    const filepath = path.join('graphs', `sim${stamp}`, filename);
+
+    fs.writeFileSync(filepath, JSON.stringify({
+        params: params,
+        elements: cy.elements().jsons()
+    }, null, 2));
+
+    console.log(`Saved ${filename}`);
+}
+
 // ---------- Run experiment for 3 different c values ----------
-const N = 10000;      // number of nodes
+
+// time stamp simulation
+const stamp = (new Date()).toISOString().replace(/[:.]/g, '-');
+
+// Watts-Strogatz parameters
+const N = 500;      // number of nodes
 const k = 15;       // each node connected to k nearest neighbors (k even)
 const cValues = [0.001, 0.01, 0.05, 0.2, 0.9];
-const steps = 1000; // time steps
 
 // fixed SIRS parameters
 // const Iprob = 0.12;
 const Iperiod = 3;
 const Rperiod = 9;
 const Iseed = 0.1;
+const steps = 500; // time steps
+
 const params = { N, k, cValues, Iperiod, Rperiod, Iseed, steps}
 
 // // non-fixed SIRS parameters
@@ -209,25 +233,29 @@ const traces = [];
 let tAxis = null;
 
 cValues.forEach(c => {
-  console.log(`Running SIRS for c=${c}...`);
-  const cy = createSmallWorldCy(N, k, c);
-  //DEBUG
-  const componentCount = cy.elements().components().length;
-  console.log("WS component count " + componentCount);
-  if(componentCount != 1) return;
-  //DEBUG END
-  
-  const series = runSIRSfixed(cy, { Iperiod, Rperiod, steps, Iseed });
+    console.log(`Running SIRS for c=${c}...`);
+    const cy = createSmallWorldCy(N, k, c);
+    //DEBUG
+    const componentCount = cy.elements().components().length;
+    console.log("WS component count " + componentCount);
+    if(componentCount != 1) return;
+    //DEBUG END
+
+    // Export graph for rendering
+    exportGraph(cy, {N, k, c}, stamp);
+
+    // run SIRS epidemic on the contact network
+    const series = runSIRSfixed(cy, { Iperiod, Rperiod, steps, Iseed });
 //   const series = runSIRS(cy, { beta, gamma, omega, steps, seed });
 //   console.log(series.slice(5000, 5600).map(p => p.IFrac));
 
-  if (!tAxis) tAxis = series.map(p => p.t);
-  const infected = series.map(p => p.I);
+    if (!tAxis) tAxis = series.map(p => p.t);
+    const infected = series.map(p => p.I);
 
-  traces.push({
-    c,
-    infected
-  });
+    traces.push({
+        c,
+        infected
+    });
 });
 
 // ---------- Generate HTML with Plotly ----------
@@ -268,5 +296,5 @@ const html = `<!doctype html>
 </body>
 </html>`;
 
-fs.writeFileSync('infected_over_time.html', html);
-console.log('Wrote infected_over_time.html – open it in browser to see the plot.');
+fs.writeFileSync(`plot_simulation_${stamp}.html`, html);
+console.log(`Wrote plot_simulation_${stamp}.html – open it in browser to see the plot.`);
