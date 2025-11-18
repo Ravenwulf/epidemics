@@ -2,7 +2,7 @@ const cytoscape = require('cytoscape');
 const fs = require('fs');
 const path = require('path');
 
-// ---------- Watts–Strogatz generator ----------
+// Watts–Strogatz generator 
 function wattsStrogatz(N, k, c) {
   const nodes = [];
   const edges = [];
@@ -11,15 +11,16 @@ function wattsStrogatz(N, k, c) {
     nodes.push({ data: { id: String(i) } });
   }
 
-  const m = k / 2; // k must be even
+  const m = k / 2; // k should be even
 
+  // for each node, create its neighborhood according to the k parameter
   for (let i = 0; i < N; i++) {
     for (let j = 1; j <= m; j++) {
       const src = i;
       const to = (i + j) % N;
 
+      // rewire edge endpoint randomly with probability c to generate long range connections
       if (Math.random() < c) {
-        // rewire edge endpoint
         const rand = Math.floor(Math.random() * N);
         edges.push({ data: { source: String(src), target: String(rand) } });
       } else {
@@ -31,6 +32,7 @@ function wattsStrogatz(N, k, c) {
   return nodes.concat(edges);
 }
 
+// take Watts-Strogatz parameters and feed the completed network into a cytoscape instance
 function createSmallWorldCy(N, k, c) {
   return cytoscape({
     headless: true,
@@ -38,56 +40,7 @@ function createSmallWorldCy(N, k, c) {
   });
 }
 
-// ---------- SIRS model ----------
-// function runSIRS(cy, params) {
-//   const { beta, gamma, omega, steps, seed } = params;
-
-//   const state = {};
-//   cy.nodes().forEach(n => (state[n.id()] = 0)); // 0=S, 1=I, 2=R
-
-//   // seed a few initial infections
-//   cy.nodes().slice(0, seed).forEach(n => (state[n.id()] = 1));
-
-//   const series = [];
-
-//   for (let t = 0; t < steps; t++) {
-//     const next = { ...state };
-
-//     cy.nodes().forEach(node => {
-//       const id = node.id();
-//       const s = state[id];
-
-//       if (s === 0) {
-//         // S -> I, depends on infected neighbors
-//         const infectedNeighbors = node
-//           .neighborhood('node')
-//           .filter(n => state[n.id()] === 1).length;
-
-//         const p = 1 - Math.pow(1 - beta, infectedNeighbors);
-//         if (Math.random() < pInfect) next[id] = 1;
-
-//       } else if (s === 1) {
-//         // I -> R
-//         if (Math.random() < gamma) next[id] = 2;
-
-//       } else if (s === 2) {
-//         // R -> S
-//         if (Math.random() < omega) next[id] = 0;
-//       }
-//     });
-
-//     Object.assign(state, next);
-
-//     const I = Object.values(state).filter(x => x === 1).length;
-//     const S = Object.values(state).filter(x => x === 0).length;
-//     const R = Object.values(state).filter(x => x === 2).length;
-
-//     series.push({ t, S, I, R });
-//   }
-
-//   return series;
-// }
-
+// simulate SIRS epidemic on the given cytoscape network object with provided SIRS parameters 
 function runSIRSfixed(cy, params) {
     const { Iperiod, Rperiod, steps, Iseed } = params;
 
@@ -103,6 +56,7 @@ function runSIRSfixed(cy, params) {
         timer[n.id()] = 0;
     });
 
+    // set up the initial t = 0 state of the epidemic
     const initialInfected = Math.max(1, Math.round(Iseed * N));
     const shuffled = nodes.sort(() => Math.random() - 0.5);
     for(let i = 0; i < initialInfected; i++) {
@@ -123,54 +77,53 @@ function runSIRSfixed(cy, params) {
 
             // susceptible
             if(s === 0) {
+                // check infection status of neighbors to determine probability that this node gets infected
                 const neighbors = node.neighborhood('node');
                 const k = neighbors.length;
                 const kinf = neighbors.filter(n => state[n.id()] === 1).length;
 
                 // infection probability = (# of infected neighbors) / (# of neighbors) or 0 if no neighbors
                 const p = (k === 0 ? 0 : (kinf / k));
-                //DEBUG
-                // if(t > 20 & t < 30) console.log(`k: ${k}, kinf: ${kinf}, frac: ${p}`);
-                //DEBUG
 
                 if (Math.random() < p) {
-                 newState[id] = 1; //infected   
-                 newTimer[id] = Iperiod;
+                  newState[id] = 1; // become infected   
+                  newTimer[id] = Iperiod;
                 } else {
-                    newState[id] = 0;
-                    newTimer[id] = 0;
+                  newState[id] = 0; // remain susceptible
+                  newTimer[id] = 0;
                 }
 
             // infected
             } else if(s === 1) {
                 const remaining = timer[id] - 1;
                 if(remaining <= 0) {
-                    newState[id] = 2; // immune
+                    newState[id] = 2; // become immune
                     newTimer[id] = Rperiod;
                 } else {
-                    newState[id] = 1; // infected
+                    newState[id] = 1; // remain infected
                     newTimer[id] = remaining;
                 }
             // immune
             } else if(s === 2) {
                 const remaining = timer[id] - 1;
                 if(remaining <= 0) {
-                    newState[id] = 0; // susceptible
+                    newState[id] = 0; // become susceptible
                     newTimer[id] = 0;
                 } else {
-                    newState[id] = 2; // immune
+                    newState[id] = 2; // remain immune
                     newTimer[id] = remaining;
                 }
             }
         });
 
+        // update states for this timestep
         nodes.forEach(n => {
             const id = n.id();
             state[id] = newState[id];
             timer[id] = newTimer[id];
         });
 
-        // record values
+        // record values for simulation results
         let S = 0, I = 0, R = 0;
         nodes.forEach(n => {
             if(state[n.id()] === 0) S++;
@@ -180,13 +133,16 @@ function runSIRSfixed(cy, params) {
         //DEBUG
         if(t%(N/10) == 0) console.log(`Infection at step t = ${t}: ${I}`);
         //DEBUG END
+
+        // store the results of this timestep
         series.push({ t, S, I, R, SFrac: S / N, IFrac: I / N, RFrac: R / N });
     }
     return series;
 }
 
+// export the assembled Watts-Strogatz graph to json for rendering or for further simulations
 function exportGraph(cy, params) {
-    // Unique filename
+    // unique filename using timestamp
     const filename = `ws_graph_c${String(params.c).replace('.', 'p')}.json`;
 
     if (!fs.existsSync(`./graphs/sim${stamp}`)) {
@@ -203,35 +159,27 @@ function exportGraph(cy, params) {
     console.log(`Saved ${filename}`);
 }
 
-// ---------- Run experiment for 3 different c values ----------
-
-// time stamp simulation
+// PARAMETERS
+// time stamp simulation for unique filenames
 const stamp = (new Date()).toISOString().replace(/[:.]/g, '-');
 
 // Watts-Strogatz parameters
-const N = 500;      // number of nodes
-const k = 15;       // each node connected to k nearest neighbors (k even)
-const cValues = [0.001, 0.01, 0.05, 0.2, 0.9];
+const N = 5000;    // number of nodes
+const k = 14;      // each node connected to k nearest "neighbors" (no relation)
+const cValues = [0.001, 0.01, 0.05, 0.2];
 
 // fixed SIRS parameters
-// const Iprob = 0.12;
-const Iperiod = 3;
-const Rperiod = 9;
-const Iseed = 0.1;
+const Iperiod = 4; // infection period (measured in time steps)
+const Rperiod = 16;// recovery period (measrued in time steps)
+const Iseed = 0.1; // fraction of nodes which begin in infected state at timestep t = 0
 const steps = 500; // time steps
 
 const params = { N, k, cValues, Iperiod, Rperiod, Iseed, steps}
 
-// // non-fixed SIRS parameters
-// const beta = 0.03;  // infection rate
-// const gamma = 0.1;  // recovery rate
-// const omega = 0.01; // loss of immunity rate
-// const seed = 5;
-
-
 const traces = [];
 let tAxis = null;
 
+// for each cValue set in the parameters, run an SIRS epidemic on the associated Watts-Strogatz contact network
 cValues.forEach(c => {
     console.log(`Running SIRS for c=${c}...`);
     const cy = createSmallWorldCy(N, k, c);
@@ -241,13 +189,11 @@ cValues.forEach(c => {
     if(componentCount != 1) return;
     //DEBUG END
 
-    // Export graph for rendering
+    // export graph for rendering
     exportGraph(cy, {N, k, c}, stamp);
 
     // run SIRS epidemic on the contact network
     const series = runSIRSfixed(cy, { Iperiod, Rperiod, steps, Iseed });
-//   const series = runSIRS(cy, { beta, gamma, omega, steps, seed });
-//   console.log(series.slice(5000, 5600).map(p => p.IFrac));
 
     if (!tAxis) tAxis = series.map(p => p.t);
     const infected = series.map(p => p.I);
@@ -296,5 +242,8 @@ const html = `<!doctype html>
 </body>
 </html>`;
 
-fs.writeFileSync(`plot_simulation_${stamp}.html`, html);
-console.log(`Wrote plot_simulation_${stamp}.html – open it in browser to see the plot.`);
+if (!fs.existsSync(`./graphs/sim${stamp}`)) {
+  fs.mkdirSync(`./graphs/sim${stamp}`);
+}
+fs.writeFileSync(path.join('graphs', `sim${stamp}`, `plot_simulation_${stamp}.html`), html);
+console.log(`generated plot_simulation_${stamp}.html – open it in browser to see the plot.`);
