@@ -89,7 +89,7 @@ function createSmallWorldCy(N, k, c) {
 // }
 
 function runSIRSfixed(cy, params) {
-    const { Istrength, Iperiod, Rperiod, steps, Iseed } = params;
+    const { Iperiod, Rperiod, steps, Iseed } = params;
 
     const nodes = cy.nodes();
     const N = nodes.length;
@@ -130,8 +130,7 @@ function runSIRSfixed(cy, params) {
                 // infection probability = (# of infected neighbors) / (# of neighbors) or 0 if no neighbors
                 const p = (k === 0 ? 0 : (kinf / k));
                 //DEBUG
-                if(t > 20 & t < 30) console.log(`k: ${k}, kinf: ${kinf}, frac: ${p}`);
-                // const p = Math.min(0.8, Istrength*p)
+                // if(t > 20 & t < 30) console.log(`k: ${k}, kinf: ${kinf}, frac: ${p}`);
                 //DEBUG
 
                 if (Math.random() < p) {
@@ -194,10 +193,10 @@ const steps = 1000; // time steps
 
 // fixed SIRS parameters
 // const Iprob = 0.12;
-const Istrength = 0.3;
 const Iperiod = 3;
 const Rperiod = 9;
 const Iseed = 0.1;
+const params = { N, k, cValues, Iperiod, Rperiod, Iseed, steps}
 
 // // non-fixed SIRS parameters
 // const beta = 0.03;  // infection rate
@@ -217,7 +216,8 @@ cValues.forEach(c => {
   console.log("WS component count " + componentCount);
   if(componentCount != 1) return;
   //DEBUG END
-  const series = runSIRSfixed(cy, { Istrength, Iperiod, Rperiod, steps, Iseed });
+  
+  const series = runSIRSfixed(cy, { Iperiod, Rperiod, steps, Iseed });
 //   const series = runSIRS(cy, { beta, gamma, omega, steps, seed });
 //   console.log(series.slice(5000, 5600).map(p => p.IFrac));
 
@@ -257,6 +257,13 @@ const html = `<!doctype html>
     };
 
     Plotly.newPlot('plot', traces, layout);
+  </script>
+    <pre id="params"></pre>
+
+  <script>
+    const params = ${JSON.stringify(params, null, 2)};
+    document.getElementById('params').textContent =
+      'Simulation parameters:\\n' + JSON.stringify(params, null, 2);
   </script>
 </body>
 </html>`;
