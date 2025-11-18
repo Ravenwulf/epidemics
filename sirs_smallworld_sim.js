@@ -164,13 +164,13 @@ function exportGraph(cy, params) {
 const stamp = (new Date()).toISOString().replace(/[:.]/g, '-');
 
 // Watts-Strogatz parameters
-const N = 5000;    // number of nodes
-const k = 14;      // each node connected to k nearest "neighbors" (no relation)
+const N = 10000;    // number of nodes
+const k = 15;      // each node connected to k nearest "neighbors" (no relation)
 const cValues = [0.001, 0.01, 0.05, 0.2];
 
 // fixed SIRS parameters
-const Iperiod = 4; // infection period (measured in time steps)
-const Rperiod = 16;// recovery period (measrued in time steps)
+const Iperiod = 3; // infection period (measured in time steps)
+const Rperiod = 9;// recovery period (measrued in time steps)
 const Iseed = 0.1; // fraction of nodes which begin in infected state at timestep t = 0
 const steps = 500; // time steps
 
