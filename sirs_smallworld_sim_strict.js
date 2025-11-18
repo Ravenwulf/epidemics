@@ -6,24 +6,49 @@ const fs = require('fs');
 function wattsStrogatz(N, k, c) {
   const nodes = [];
   const edges = [];
-
-  for (let i = 0; i < N; i++) {
-    nodes.push({ data: { id: String(i) } });
-  }
+  const adj = Array.from({ length: N }, () => new Set());
 
   const m = k / 2; // k must be even
-
   for (let i = 0; i < N; i++) {
     for (let j = 1; j <= m; j++) {
-      const src = i;
-      const to = (i + j) % N;
+      const u = i;
+      const v = (i + j) % N;
+
+      // add edge both ways
+      adj[u].add(v);
+      adj[v].add(u);
+    }
+  }
+
+  for (let u = 0; u < N; u++) {
+    for (let j = 1; j <= m; j++) {
+      const v = (u + j) % N;
 
       if (Math.random() < c) {
-        // rewire edge endpoint
-        const rand = Math.floor(Math.random() * N);
-        edges.push({ data: { source: String(src), target: String(rand) } });
-      } else {
-        edges.push({ data: { source: String(src), target: String(to) } });
+        // remove existing edge u–v
+        adj[u].delete(v);
+        adj[v].delete(u);
+
+        let w;
+        do {
+          w = Math.floor(Math.random() * N);
+        } while (
+          w === u ||          // no self-loop
+          adj[u].has(w)       // no duplicate
+        );
+
+        // add new edge u–w
+        adj[u].add(w);
+        adj[w].add(u);
+      }
+    }
+  }
+  
+  for (let i = 0; i < N; i++) {
+    nodes.push({ data: { id: "" + i } });
+    for (const j of adj[i]) {
+      if (i < j) {
+        edges.push({ data: { source: "" + i, target: "" + j } });
       }
     }
   }
@@ -38,58 +63,8 @@ function createSmallWorldCy(N, k, c) {
   });
 }
 
-// ---------- SIRS model ----------
-// function runSIRS(cy, params) {
-//   const { beta, gamma, omega, steps, seed } = params;
-
-//   const state = {};
-//   cy.nodes().forEach(n => (state[n.id()] = 0)); // 0=S, 1=I, 2=R
-
-//   // seed a few initial infections
-//   cy.nodes().slice(0, seed).forEach(n => (state[n.id()] = 1));
-
-//   const series = [];
-
-//   for (let t = 0; t < steps; t++) {
-//     const next = { ...state };
-
-//     cy.nodes().forEach(node => {
-//       const id = node.id();
-//       const s = state[id];
-
-//       if (s === 0) {
-//         // S -> I, depends on infected neighbors
-//         const infectedNeighbors = node
-//           .neighborhood('node')
-//           .filter(n => state[n.id()] === 1).length;
-
-//         const p = 1 - Math.pow(1 - beta, infectedNeighbors);
-//         if (Math.random() < pInfect) next[id] = 1;
-
-//       } else if (s === 1) {
-//         // I -> R
-//         if (Math.random() < gamma) next[id] = 2;
-
-//       } else if (s === 2) {
-//         // R -> S
-//         if (Math.random() < omega) next[id] = 0;
-//       }
-//     });
-
-//     Object.assign(state, next);
-
-//     const I = Object.values(state).filter(x => x === 1).length;
-//     const S = Object.values(state).filter(x => x === 0).length;
-//     const R = Object.values(state).filter(x => x === 2).length;
-
-//     series.push({ t, S, I, R });
-//   }
-
-//   return series;
-// }
-
 function runSIRSfixed(cy, params) {
-    const { Istrength, Iperiod, Rperiod, steps, Iseed } = params;
+    const { Iperiod, Rperiod, steps, Iseed } = params;
 
     const nodes = cy.nodes();
     const N = nodes.length;
@@ -105,7 +80,7 @@ function runSIRSfixed(cy, params) {
 
     const initialInfected = Math.max(1, Math.round(Iseed * N));
     const shuffled = nodes.sort(() => Math.random() - 0.5);
-    for(let i = 0; i < initialInfected; i++) {
+    for(let i = 0; i < Iseed; i++) {
         const id = shuffled[i].id();
         state[id] = 1;
         timer[id] = Iperiod;
@@ -123,16 +98,12 @@ function runSIRSfixed(cy, params) {
 
             // susceptible
             if(s === 0) {
-                const neighbors = node.neighborhood('node');
+                const neighbors = node.neighborhood('node').filter(n => state[n.id()] === 1)
                 const k = neighbors.length;
                 const kinf = neighbors.filter(n => state[n.id()] === 1).length;
 
                 // infection probability = (# of infected neighbors) / (# of neighbors) or 0 if no neighbors
-                const p = (k === 0 ? 0 : (kinf / k));
-                //DEBUG
-                if(t > 20 & t < 30) console.log(`k: ${k}, kinf: ${kinf}, frac: ${p}`);
-                // const p = Math.min(0.8, Istrength*p)
-                //DEBUG
+                const p = k === 0 ? 0 : kinf / k;
 
                 if (Math.random() < p) {
                  newState[id] = 1; //infected   
@@ -178,33 +149,23 @@ function runSIRSfixed(cy, params) {
             else if(state[n.id()] === 1) I++;
             else R++;
         });
-        //DEBUG
-        if(t%(N/10) == 0) console.log(`Infection at step t = ${t}: ${I}`);
-        //DEBUG END
+
         series.push({ t, S, I, R, SFrac: S / N, IFrac: I / N, RFrac: R / N });
     }
     return series;
 }
 
 // ---------- Run experiment for 3 different c values ----------
-const N = 10000;      // number of nodes
+const N = 6000;      // number of nodes
 const k = 15;       // each node connected to k nearest neighbors (k even)
-const cValues = [0.001, 0.01, 0.05, 0.2, 0.9];
-const steps = 1000; // time steps
+const cValues = [0.8];
+const steps = 500; // time steps
 
 // fixed SIRS parameters
 // const Iprob = 0.12;
-const Istrength = 0.3;
 const Iperiod = 3;
 const Rperiod = 9;
 const Iseed = 0.1;
-
-// // non-fixed SIRS parameters
-// const beta = 0.03;  // infection rate
-// const gamma = 0.1;  // recovery rate
-// const omega = 0.01; // loss of immunity rate
-// const seed = 5;
-
 
 const traces = [];
 let tAxis = null;
@@ -212,13 +173,14 @@ let tAxis = null;
 cValues.forEach(c => {
   console.log(`Running SIRS for c=${c}...`);
   const cy = createSmallWorldCy(N, k, c);
+
   //DEBUG
   const componentCount = cy.elements().components().length;
   console.log("WS component count " + componentCount);
   if(componentCount != 1) return;
   //DEBUG END
-  const series = runSIRSfixed(cy, { Istrength, Iperiod, Rperiod, steps, Iseed });
-//   const series = runSIRS(cy, { beta, gamma, omega, steps, seed });
+
+  const series = runSIRSfixed(cy, { Iperiod, Rperiod, steps, Iseed });
 //   console.log(series.slice(5000, 5600).map(p => p.IFrac));
 
   if (!tAxis) tAxis = series.map(p => p.t);
