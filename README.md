@@ -4,7 +4,7 @@
 - `npm install`
 - modify the parameters in sirs_smallworld_sim.js (may add CLI or config document parameters in a future update)
 - build Watts-Strogatz smallworld contact networks and run SIRS simulations `node sirs_smallworld_sim.js`
-- render contact networks `node batch_render.js graphs/<sim>` (note: copy the correct subdirectory path to replace "<sim>")
+- render contact networks `node batch_render.js graphs/<sim>` (note: copy the correct subdirectory path to replace "\<sim>")
 
 I used **Cytoscape** to assemble Watts-Strogatz ring networks with variable small-world properties in order to simulate SIRS epidemic models and observe the relation between small-world properties and the emergence of synchronized oscillations in infections.
 
